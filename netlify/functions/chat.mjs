@@ -5,67 +5,53 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ======================================================
-// НАСТРОЙКИ
-// ======================================================
-
-const KNOWLEDGE_PATH = path.join(
-  __dirname,
-  "../../knowledge/knowledge.json"
-);
-
-// ======================================================
-// CORS
-// ======================================================
-
 const headers = {
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
 };
 
-// ======================================================
-// ОТВЕТ
-// ======================================================
+// --------------------------------------------------
+// Поиск knowledge.json
+// --------------------------------------------------
 
-function response(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers
-  });
+function findKnowledgeFile() {
+  const possiblePaths = [
+    path.join(__dirname, "../../knowledge/knowledge.json"),
+    path.join(process.cwd(), "knowledge/knowledge.json"),
+    path.join(process.cwd(), "/knowledge/knowledge.json")
+  ];
+
+  for (const filePath of possiblePaths) {
+    console.log("Проверяю:", filePath);
+
+    if (fs.existsSync(filePath)) {
+      console.log("БАЗА НАЙДЕНА:", filePath);
+      return filePath;
+    }
+  }
+
+  console.log("knowledge.json НЕ НАЙДЕН");
+
+  return null;
 }
 
-// ======================================================
-// НОРМАЛИЗАЦИЯ
-// ======================================================
-
-function normalize(text = "") {
-  return String(text)
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .replace(/[^а-яa-z0-9\s]/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// ======================================================
-// ЗАГРУЗКА БАЗЫ
-// ======================================================
+// --------------------------------------------------
+// Загрузка базы
+// --------------------------------------------------
 
 function loadKnowledge() {
+  const filePath = findKnowledgeFile();
+
+  if (!filePath) {
+    return [];
+  }
+
   try {
-    if (!fs.existsSync(KNOWLEDGE_PATH)) {
-      console.log("База не найдена:", KNOWLEDGE_PATH);
-      return [];
-    }
+    const raw = fs.readFileSync(filePath, "utf8");
 
-    const raw = fs.readFileSync(KNOWLEDGE_PATH, "utf8");
-
-    if (!raw.trim()) {
-      console.log("База пустая");
-      return [];
-    }
+    console.log("Размер базы:", raw.length);
 
     const data = JSON.parse(raw);
 
@@ -77,267 +63,136 @@ function loadKnowledge() {
       return data.items;
     }
 
-    if (Array.isArray(data.entries)) {
-      return data.entries;
-    }
-
-    if (Array.isArray(data.knowledge)) {
-      return data.knowledge;
-    }
-
     return [];
+
   } catch (error) {
-    console.error("Ошибка загрузки базы:", error);
+    console.error("Ошибка JSON:", error);
     return [];
   }
 }
 
-// ======================================================
-// РАСПОЗНАВАНИЕ ПЛАНЕТЫ
-// ======================================================
+// --------------------------------------------------
+// Нормализация
+// --------------------------------------------------
 
-const planets = {
-  "луна": "Луна",
-  "солнце": "Солнце",
-  "марс": "Марс",
-  "меркурий": "Меркурий",
-  "венера": "Венера",
-  "юпитер": "Юпитер",
-  "сатурн": "Сатурн",
-  "узлы": "Узлы",
-  "северный узел": "Узлы",
-  "южный узел": "Узлы"
-};
-
-// ======================================================
-// РАСПОЗНАВАНИЕ ЗНАКА
-// ======================================================
-
-const signs = {
-  "овен": "Овен",
-  "телец": "Телец",
-  "близнецы": "Близнецы",
-  "рак": "Рак",
-  "лев": "Лев",
-  "дева": "Дева",
-  "весы": "Весы",
-  "скорпион": "Скорпион",
-  "стрелец": "Стрелец",
-  "козерог": "Козерог",
-  "водолей": "Водолей",
-  "рыбы": "Рыбы"
-};
-
-// ======================================================
-// РАСПОЗНАВАНИЕ ДОМА
-// ======================================================
-
-function getHouse(text) {
-  const match = text.match(
-    /(?:дом|доме|дома)\s*(\d{1,2})/i
-  );
-
-  if (!match) {
-    return null;
-  }
-
-  return Number(match[1]);
+function normalize(text = "") {
+  return String(text)
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// ======================================================
-// ПОИСК ПЛАНЕТЫ
-// ======================================================
+// --------------------------------------------------
+// Планеты
+// --------------------------------------------------
 
-function getPlanet(text) {
-  const normalized = normalize(text);
+const planets = [
+  "луна",
+  "солнце",
+  "марс",
+  "меркурий",
+  "венера",
+  "юпитер",
+  "сатурн"
+];
 
-  for (const key of Object.keys(planets)) {
-    if (normalized.includes(key)) {
-      return planets[key];
-    }
-  }
+// --------------------------------------------------
+// Знаки
+// --------------------------------------------------
 
-  return null;
-}
+const signs = [
+  "овен",
+  "телец",
+  "близнецы",
+  "рак",
+  "лев",
+  "дева",
+  "весы",
+  "скорпион",
+  "стрелец",
+  "козерог",
+  "водолей",
+  "рыбы"
+];
 
-// ======================================================
-// ПОИСК ЗНАКА
-// ======================================================
-
-function getSign(text) {
-  const normalized = normalize(text);
-
-  for (const key of Object.keys(signs)) {
-    if (normalized.includes(key)) {
-      return signs[key];
-    }
-  }
-
-  return null;
-}
-
-// ======================================================
-// ПОИСК ПО БАЗЕ
-// ======================================================
+// --------------------------------------------------
+// Поиск ответа
+// --------------------------------------------------
 
 function findAnswer(message, knowledge) {
-  const normalized = normalize(message);
 
-  const planet = getPlanet(message);
-  const sign = getSign(message);
-  const house = getHouse(normalized);
+  const query = normalize(message);
 
-  console.log("Запрос:", message);
-  console.log("Планета:", planet);
-  console.log("Знак:", sign);
-  console.log("Дом:", house);
-  console.log("Записей в базе:", knowledge.length);
+  console.log("QUERY:", query);
+  console.log("KNOWLEDGE:", knowledge);
 
-  // --------------------------------------------------
-  // Сначала ищем максимально точное совпадение
-  // --------------------------------------------------
+  const planet = planets.find(
+    p => query.includes(p)
+  );
 
-  if (planet && sign && house) {
-    const exact = knowledge.find(item => {
-      const itemPlanet = normalize(item.planet || "");
-      const itemSign = normalize(item.sign || "");
-      const itemHouse = Number(item.house);
+  const sign = signs.find(
+    s => query.includes(s)
+  );
 
-      return (
-        itemPlanet === normalize(planet) &&
-        itemSign === normalize(sign) &&
-        itemHouse === house
-      );
-    });
+  console.log("PLANET:", planet);
+  console.log("SIGN:", sign);
 
-    if (exact) {
-      return exact;
-    }
-  }
-
-  // --------------------------------------------------
-  // Планета + знак
-  // --------------------------------------------------
+  // -----------------------------------------------
+  // Точное совпадение планета + знак
+  // -----------------------------------------------
 
   if (planet && sign) {
-    const exact = knowledge.find(item => {
-      const itemPlanet = normalize(item.planet || "");
-      const itemSign = normalize(item.sign || "");
+
+    const item = knowledge.find(entry => {
+
+      const entryPlanet = normalize(
+        entry.planet || ""
+      );
+
+      const entrySign = normalize(
+        entry.sign || ""
+      );
 
       return (
-        itemPlanet === normalize(planet) &&
-        itemSign === normalize(sign)
+        entryPlanet === planet &&
+        entrySign === sign
       );
+
     });
 
-    if (exact) {
-      return exact;
+    if (item) {
+
+      console.log("НАЙДЕНА ЗАПИСЬ:", item);
+
+      return item;
     }
   }
 
-  // --------------------------------------------------
-  // Планета + дом
-  // --------------------------------------------------
+  // -----------------------------------------------
+  // Поиск по тексту
+  // -----------------------------------------------
 
-  if (planet && house) {
-    const exact = knowledge.find(item => {
-      const itemPlanet = normalize(item.planet || "");
-      const itemHouse = Number(item.house);
+  const item = knowledge.find(entry => {
 
-      return (
-        itemPlanet === normalize(planet) &&
-        itemHouse === house
-      );
-    });
-
-    if (exact) {
-      return exact;
-    }
-  }
-
-  // --------------------------------------------------
-  // Ищем по question/title/key
-  // --------------------------------------------------
-
-  const candidates = knowledge.filter(item => {
     const text = normalize(
-      [
-        item.question,
-        item.title,
-        item.key,
-        item.name,
-        item.tags,
-        item.planet,
-        item.sign,
-        item.house
-      ]
-        .filter(Boolean)
-        .join(" ")
+      `${entry.key || ""} ${entry.planet || ""} ${entry.sign || ""}`
     );
 
-    return text.includes(normalized);
+    return text.includes(query);
+
   });
 
-  if (candidates.length > 0) {
-    return candidates[0];
-  }
-
-  // --------------------------------------------------
-  // Более мягкий поиск
-  // --------------------------------------------------
-
-  const words = normalized
-    .split(" ")
-    .filter(word => word.length > 2);
-
-  let bestItem = null;
-  let bestScore = 0;
-
-  for (const item of knowledge) {
-    const text = normalize(
-      [
-        item.question,
-        item.title,
-        item.key,
-        item.name,
-        item.tags,
-        item.planet,
-        item.sign,
-        item.house,
-        item.answer,
-        item.content,
-        item.text
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
-
-    let score = 0;
-
-    for (const word of words) {
-      if (text.includes(word)) {
-        score++;
-      }
-    }
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestItem = item;
-    }
-  }
-
-  if (bestItem && bestScore > 0) {
-    return bestItem;
-  }
-
-  return null;
+  return item || null;
 }
 
-// ======================================================
-// ПОДСТАНОВКА ПЕРЕМЕННЫХ
-// ======================================================
+// --------------------------------------------------
+// Подстановка имени
+// --------------------------------------------------
 
 function replaceVariables(text, profile = {}) {
+
   if (!text) {
     return "";
   }
@@ -345,55 +200,81 @@ function replaceVariables(text, profile = {}) {
   return String(text).replace(
     /\{([^}]+)\}/g,
     (match, variable) => {
-      return profile[variable] !== undefined
-        ? profile[variable]
-        : match;
+
+      if (
+        profile[variable] !== undefined
+      ) {
+        return profile[variable];
+      }
+
+      return match;
+
     }
   );
 }
 
-// ======================================================
-// ОСНОВНОЙ HANDLER
-// ======================================================
+// --------------------------------------------------
+// HTTP
+// --------------------------------------------------
 
 export default async function handler(req) {
 
   // OPTIONS
+
   if (req.method === "OPTIONS") {
-    return response({}, 204);
+
+    return new Response(
+      JSON.stringify({}),
+      {
+        status: 204,
+        headers
+      }
+    );
+
   }
 
   // GET
+
   if (req.method === "GET") {
+
     const knowledge = loadKnowledge();
 
-    return response({
-      ok: true,
-      ai: false,
-      service: "ANN",
-      knowledgeItems: knowledge.length,
-      message: "ANN работает без AI"
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        ai: false,
+        knowledgeItems: knowledge.length
+      }),
+      {
+        status: 200,
+        headers
+      }
+    );
+
   }
 
-  // Только POST
+  // POST
+
   if (req.method !== "POST") {
-    return response(
-      {
+
+    return new Response(
+      JSON.stringify({
         ok: false,
-        error: "Метод не поддерживается"
-      },
-      405
+        error: "Method not allowed"
+      }),
+      {
+        status: 405,
+        headers
+      }
     );
+
   }
 
   try {
 
-    // --------------------------------------------------
-    // Получаем тело запроса
-    // --------------------------------------------------
-
     const body = await req.json();
+
+    console.log("BODY:", body);
 
     const message = String(
       body.message ||
@@ -403,39 +284,30 @@ export default async function handler(req) {
     ).trim();
 
     if (!message) {
-      return response(
-        {
+
+      return new Response(
+        JSON.stringify({
           ok: false,
           error: "Пустое сообщение"
-        },
-        400
+        }),
+        {
+          status: 400,
+          headers
+        }
       );
+
     }
 
-    // --------------------------------------------------
-    // Загружаем базу
-    // --------------------------------------------------
-
     const knowledge = loadKnowledge();
-
-    // --------------------------------------------------
-    // Профиль пользователя
-    // --------------------------------------------------
-
-    const profile = body.profile || {};
-
-    // --------------------------------------------------
-    // Ищем ответ
-    // --------------------------------------------------
 
     const result = findAnswer(
       message,
       knowledge
     );
 
-    // --------------------------------------------------
-    // Нашли
-    // --------------------------------------------------
+    // ---------------------------------------------
+    // Ответ найден
+    // ---------------------------------------------
 
     if (result) {
 
@@ -443,48 +315,67 @@ export default async function handler(req) {
         result.answer ||
         result.content ||
         result.text ||
-        result.description ||
-        result.value ||
         "";
 
-      return response({
-        ok: true,
-        ai: false,
-        found: true,
-        reply: replaceVariables(
+      const finalAnswer =
+        replaceVariables(
           answer,
-          profile
-        ),
-        data: result
-      });
+          body.profile || {}
+        );
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          ai: false,
+          found: true,
+          reply: finalAnswer,
+          answer: finalAnswer,
+          data: result
+        }),
+        {
+          status: 200,
+          headers
+        }
+      );
+
     }
 
-    // --------------------------------------------------
-    // Не нашли
-    // --------------------------------------------------
+    // ---------------------------------------------
+    // Ответ НЕ найден
+    // ---------------------------------------------
 
-    return response({
-      ok: true,
-      ai: false,
-      found: false,
-      reply:
-        "Я пока не нашла готовую трактовку для этого запроса в базе знаний. Попробуй указать планету и знак, например: «Луна в Тельце»."
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        ai: false,
+        found: false,
+        reply:
+          "Я не нашла эту трактовку в базе знаний."
+      }),
+      {
+        status: 200,
+        headers
+      }
+    );
 
   } catch (error) {
 
     console.error(
-      "Ошибка ANN:",
+      "SERVER ERROR:",
       error
     );
 
-    return response(
-      {
+    return new Response(
+      JSON.stringify({
         ok: false,
-        error: "Ошибка обработки запроса",
-        details: error.message
-      },
-      500
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers
+      }
     );
+
   }
+
 }
