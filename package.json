@@ -1,0 +1,8 @@
+{
+  "name": "ann-netlify-mvp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev"
+  }
+}
